@@ -1,0 +1,1 @@
+Echodata project aims to showcase the capabilities of Tabular Foundation Models.
