@@ -13,4 +13,5 @@ pyrightconfig.json
 
 # Models
 .tabstar_checkpoint
+TabPFNModels
 
