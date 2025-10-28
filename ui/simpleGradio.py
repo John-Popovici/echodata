@@ -1,41 +1,11 @@
 # app.py
 
-import pandas as pd
 import gradio as gr
 
-from util.data_handling import read_csv_to_df
+from util.data_handling import read_csv_to_df, preview_data, infer_columns, analyze_df
 from util.trainer import run_training_and_predict
 
 from models.model_registry import MODEL_REGISTRY
-
-
-def infer_columns(df: pd.DataFrame | None) -> gr.Dropdown:
-    """Infer column labels from CSV."""
-    if df is None:
-        return gr.Dropdown(choices=[], value=None)
-
-    cols = list(map(str, df.columns))
-    default_label = cols[-1] if cols else None
-    return gr.Dropdown(choices=cols, value=default_label)
-
-
-def preview_data(df: pd.DataFrame | None) -> gr.Dataframe:
-    """Preview 5 rows from CSV."""
-    if df is None:
-        return gr.Dataframe(value=None)
-    return gr.Dataframe(value=df.head(5))
-
-
-def gather_data(df: pd.DataFrame | None) -> str:
-    """Gather and present meta-data about CSV."""
-    if df is None:
-        return ""
-
-    shape_info: str = f"Rows: {df.shape[0]}, Columns: {df.shape[1]}"
-    column_info: str = "\n".join([f"> {col}: {df[col].dtype}" for col in df.columns])
-
-    info: str = f"{shape_info}\nColumn info:\n{column_info}"
-    return info
 
 
 def build_interface() -> gr.Blocks:
@@ -65,13 +35,13 @@ def build_interface() -> gr.Blocks:
         # CSV target selectors
         with gr.Row():
             train_target = gr.Dropdown(
-                label="Training target column (defaults to last)",
+                label="Training target column",
                 choices=[],
                 value=None,
                 interactive=True,
             )
             test_target = gr.Dropdown(
-                label="(Optional) Test target column for accuracy",
+                label="Test target column",
                 choices=[],
                 value=None,
                 interactive=True,
@@ -104,39 +74,31 @@ def build_interface() -> gr.Blocks:
         # CSV preview
         with gr.Row():
             train_preview = gr.Dataframe(
-                label="Training CSV (head)",
+                label="Training Data Preview",
                 value=None,
                 interactive=False,
             )
             test_preview = gr.Dataframe(
-                label="Test CSV (head)",
+                label="Test Data Preview",
                 value=None,
                 interactive=False,
             )
 
         # Save CSV to state
-        train_csv.change(
-            fn=read_csv_to_df, inputs=[train_csv, add_train_header], outputs=data_train
-        )
-        test_csv.change(
-            fn=read_csv_to_df, inputs=[test_csv, add_test_header], outputs=data_test
-        )
-        add_train_header.change(
-            fn=read_csv_to_df, inputs=[train_csv, add_train_header], outputs=data_train
-        )
-        add_test_header.change(
-            fn=read_csv_to_df, inputs=[test_csv, add_test_header], outputs=data_test
-        )
+        train_csv.change(fn=read_csv_to_df, inputs=[train_csv, add_train_header], outputs=data_train)
+        test_csv.change(fn=read_csv_to_df, inputs=[test_csv, add_test_header], outputs=data_test)
+        add_train_header.change(fn=read_csv_to_df, inputs=[train_csv, add_train_header], outputs=data_train)
+        add_test_header.change(fn=read_csv_to_df, inputs=[test_csv, add_test_header], outputs=data_test)
 
-        # Populate choices on CSV change
+        # Populate choices on df change
         data_train.change(fn=infer_columns, inputs=data_train, outputs=train_target)
         data_test.change(fn=infer_columns, inputs=data_test, outputs=test_target)
 
-        # Populate info on CSV change
-        data_train.change(fn=gather_data, inputs=data_train, outputs=info_box_train)
-        data_test.change(fn=gather_data, inputs=data_test, outputs=info_box_test)
+        # Populate info on df change
+        data_train.change(fn=analyze_df, inputs=data_train, outputs=info_box_train)
+        data_test.change(fn=analyze_df, inputs=data_test, outputs=info_box_test)
 
-        # Populate preview on CSV change
+        # Populate preview on df change
         data_train.change(fn=preview_data, inputs=data_train, outputs=train_preview)
         data_test.change(fn=preview_data, inputs=data_test, outputs=test_preview)
 
@@ -144,26 +106,15 @@ def build_interface() -> gr.Blocks:
         run_btn = gr.Button("Fit & Predict")
 
         # Result previews
-        preds_preview = gr.Dataframe(label="Predictions (first 10)", interactive=False)
+        preds_preview = gr.Dataframe(label="Predictions Preview", interactive=False)
         preds_file = gr.File(label="Download predictions.csv")
         info_box = gr.Textbox(label="Info", interactive=False)
-        accuracy_box = gr.Number(label="Accuracy (if test has target)", precision=4)
+        accuracy_box = gr.Textbox(label="Accuracy")
 
         run_btn.click(
             fn=run_training_and_predict,
-            inputs=[
-                model_name,
-                data_train,
-                data_test,
-                train_target,
-                test_target,
-            ],
-            outputs=[
-                preds_preview,
-                preds_file,
-                info_box,
-                accuracy_box,
-            ],
+            inputs=[model_name, data_train, data_test, train_target, test_target],
+            outputs=[preds_preview, preds_file, info_box, accuracy_box],
         )
 
         return demo

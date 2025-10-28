@@ -45,8 +45,15 @@ def run_training_and_predict(
         y_test = test_df[test_target_col].to_numpy()
         accuracy = float((preds == y_test).mean())
 
-    # Build outputs
-    preds_df = pd.DataFrame({"prediction": preds})
+    # Build prediction df
+    pred_insert_index: int = range(test_df.shape[1])
+    if test_target_col and test_target_col in test_df.columns:
+        pred_insert_index = test_df.columns.get_loc(test_target_col) + 1
+
+    preds_df = test_df.copy()
+    preds_df.insert(pred_insert_index, f"pred_{test_target_col}", preds, True)
+
+    # preds_df = pd.DataFrame({"prediction": preds})
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
     preds_df.to_csv(tmp.name, index=False)
 
@@ -58,5 +65,5 @@ def run_training_and_predict(
         preds_df.head(10),
         tmp.name,
         info,
-        "N/A" if accuracy is None else str(accuracy),
+        "N/A" if accuracy is None else round(accuracy, 4),
     )
