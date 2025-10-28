@@ -16,54 +16,67 @@ def run_training_and_predict(
     test_target_col: str,
 ) -> tuple[pd.DataFrame, str, str, str]:
     """Train and predict using the model."""
-    # Train target (default to last col)
-    if (train_target_col is None) or (train_target_col not in train_df.columns):
-        train_target_col = str(train_df.columns[-1])
+    # Check targets are valid
+    if train_target_col not in train_df.columns:
+        raise gr.Error("Please select a valid training target column.")
+    if test_target_col != "None" and test_target_col not in test_df.columns:
+        raise gr.Error("Please select a valid test target column.")
 
-    # Split into numpy
+    # Split train into numpy
     y_train: np.ndarray = train_df[train_target_col].to_numpy()
     X_train: np.ndarray = train_df.drop(columns=[train_target_col]).to_numpy()
 
-    X_test = (
-        test_df.drop(columns=[test_target_col]).to_numpy()
-        if (test_target_col and test_target_col in test_df.columns)
-        else test_df.to_numpy()
-    )
+    # Split test into numpy
+    y_test: np.ndarray | None = None
+    X_test: np.ndarray = test_df.to_numpy()
+    if test_target_col != "None":
+        y_test = test_df[test_target_col].to_numpy()
+        X_test = test_df.drop(columns=[test_target_col]).to_numpy()
+
+    # Check arrays must be same width
+    if X_train.shape[1] + 1 == X_test.shape[1] and test_target_col == "None":
+        raise gr.Error("Test target might not be None: Missmatched column numbers by one.")
+    if X_train.shape[1] == X_test.shape[1] + 1 and test_target_col != "None":
+        raise gr.Error("Test target might be None: Missmatched column numbers by one.")
+    if X_train.shape[1] != X_test.shape[1]:
+        raise gr.Error("Please ensure training and test have an equal number of columns.")
+
 
     # Fit + predict
     try:
         ModelClass = MODEL_REGISTRY[model_name]
     except KeyError:
-        gr.Error("Please select a valid model.")
+        raise gr.Error("Model missing.")
 
     model = ModelClass().fit(X_train, y_train)
     preds = model.predict(X_test)
 
     # Accuracy (only if test has a target column)
-    accuracy = None
-    if test_target_col and test_target_col in test_df.columns:
-        y_test = test_df[test_target_col].to_numpy()
-        accuracy = float((preds == y_test).mean())
+    accuracy = None if test_target_col == "None" else float((preds == y_test).mean())
 
     # Build prediction df
-    pred_insert_index: int = range(test_df.shape[1])
-    if test_target_col and test_target_col in test_df.columns:
+    # Place predictions adjacent to test value or in rightmost column
+    pred_insert_index: int = test_df.shape[1]
+    pred_col_name: str = "prediction"
+    if test_target_col != "None":
         pred_insert_index = test_df.columns.get_loc(test_target_col) + 1
+        pred_col_name: str = f"pred_{test_target_col}"
 
     preds_df = test_df.copy()
-    preds_df.insert(pred_insert_index, f"pred_{test_target_col}", preds, True)
-
-    # preds_df = pd.DataFrame({"prediction": preds})
+    preds_df.insert(pred_insert_index, pred_col_name, preds, True)
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
     preds_df.to_csv(tmp.name, index=False)
 
+    # Construct output information
     info = (
         f"Shapes — X_train: {X_train.shape}, y_train: {y_train.shape}, "
         f"X_test: {X_test.shape}\nModel: {model.model_name}"
     )
+    metrics = "N/A" if accuracy is None else str(round(accuracy, 4))
+
     return (
         preds_df.head(10),
         tmp.name,
         info,
-        "N/A" if accuracy is None else round(accuracy, 4),
+        metrics,
     )

@@ -2,7 +2,7 @@
 
 import gradio as gr
 
-from util.data_handling import read_csv_to_df, preview_data, infer_columns, analyze_df
+from util.data_handling import read_csv_to_df, preview_data, infer_train_columns, infer_test_columns, analyze_df
 from util.trainer import run_training_and_predict
 
 from models.model_registry import MODEL_REGISTRY
@@ -51,10 +51,12 @@ def build_interface() -> gr.Blocks:
         with gr.Accordion(label="Data Information", open=True):
             with gr.Row():
                 add_train_header = gr.Checkbox(
-                    value=False, label="Add Header Row for Training Data"
+                    value=False,
+                    label="Add Header Row for Training Data",
                 )
                 add_test_header = gr.Checkbox(
-                    value=False, label="Add Header Row for Testing Data"
+                    value=False,
+                    label="Add Header Row for Testing Data",
                 )
 
             with gr.Row():
@@ -91,8 +93,8 @@ def build_interface() -> gr.Blocks:
         add_test_header.change(fn=read_csv_to_df, inputs=[test_csv, add_test_header], outputs=data_test)
 
         # Populate choices on df change
-        data_train.change(fn=infer_columns, inputs=data_train, outputs=train_target)
-        data_test.change(fn=infer_columns, inputs=data_test, outputs=test_target)
+        data_train.change(fn=infer_train_columns, inputs=data_train, outputs=train_target)
+        data_test.change(fn=infer_test_columns, inputs=data_test, outputs=test_target)
 
         # Populate info on df change
         data_train.change(fn=analyze_df, inputs=data_train, outputs=info_box_train)
@@ -109,7 +111,7 @@ def build_interface() -> gr.Blocks:
         preds_preview = gr.Dataframe(label="Predictions Preview", interactive=False)
         preds_file = gr.File(label="Download predictions.csv")
         info_box = gr.Textbox(label="Info", interactive=False)
-        accuracy_box = gr.Textbox(label="Accuracy")
+        accuracy_box = gr.Textbox(label="Metrics", interactive=False)
 
         run_btn.click(
             fn=run_training_and_predict,

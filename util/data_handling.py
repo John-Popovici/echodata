@@ -25,12 +25,22 @@ def preview_data(df: pd.DataFrame | None) -> pd.DataFrame | None:
     return df.head(5)
 
 
-def infer_columns(df: pd.DataFrame | None) -> gr.Dropdown:
+def infer_train_columns(df: pd.DataFrame | None) -> gr.Dropdown:
     """Infer column labels from df."""
     if df is None:
         return gr.Dropdown(choices=[], value=None)
 
     cols = list(map(str, df.columns))
+    default_label = cols[-1] if cols else None
+    return gr.Dropdown(choices=cols, value=default_label)
+
+
+def infer_test_columns(df: pd.DataFrame | None) -> gr.Dropdown:
+    """Infer column labels from df."""
+    if df is None:
+        return gr.Dropdown(choices=[], value=None)
+
+    cols = ["None"] + list(map(str, df.columns))
     default_label = cols[-1] if cols else None
     return gr.Dropdown(choices=cols, value=default_label)
 
