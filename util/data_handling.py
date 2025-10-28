@@ -1,14 +1,18 @@
 # util/data_handling.py
 
 import pandas as pd
-import gradio as gr
+from gradio.utils import NamedString
 
 
-def read_csv_to_df(file_obj) -> pd.DataFrame:
-    """Reads a csv and returns a a df."""
-    if file_obj is None:
-        raise gr.Error("Please upload the CSV.")
+def read_csv_to_df(file: NamedString | None, add_header: bool) -> pd.DataFrame | None:
+    """Reads a CSV and returns a a df."""
+    if file is None:
+        return None
+    if not add_header:
+        return pd.read_csv(file)
 
-    # Gradio gives a tempfile-like object with .name
-    return pd.read_csv(file_obj.name)
+    # Add header row to file
+    df: pd.DataFrame = pd.read_csv(file, header=None)
+    df.columns = [f"col{i}" for i in range(df.shape[1])]
+    return df
 

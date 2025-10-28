@@ -1,5 +1,6 @@
 # app.py
 
+import pandas as pd
 import gradio as gr
 
 from util.data_handling import read_csv_to_df
@@ -8,37 +9,32 @@ from util.trainer import run_training_and_predict
 from models.model_registry import MODEL_REGISTRY
 
 
-def infer_columns(file) -> gr.Dropdown:
-    """Infer column labels from csv."""
-    if file is None:
+def infer_columns(df: pd.DataFrame | None) -> gr.Dropdown:
+    """Infer column labels from CSV."""
+    if df is None:
         return gr.Dropdown(choices=[], value=None)
 
-    df = read_csv_to_df(file)
     cols = list(map(str, df.columns))
     default_label = cols[-1] if cols else None
     return gr.Dropdown(choices=cols, value=default_label)
 
 
-def preview_data(file) -> gr.Dataframe:
-    """Preview 5 rows from csv."""
-    if file is None:
+def preview_data(df: pd.DataFrame | None) -> gr.Dataframe:
+    """Preview 5 rows from CSV."""
+    if df is None:
         return gr.Dataframe(value=None)
-
-    df = read_csv_to_df(file)
     return gr.Dataframe(value=df.head(5))
 
 
-def gather_data(file) -> str:
-    """Gather and present meta-data about csv."""
-    if file is None:
-        return gr.Textbox(value=None)
+def gather_data(df: pd.DataFrame | None) -> str:
+    """Gather and present meta-data about CSV."""
+    if df is None:
+        return ""
 
-    df = read_csv_to_df(file)
+    shape_info: str = f"Rows: {df.shape[0]}, Columns: {df.shape[1]}"
+    column_info: str = "\n".join([f"> {col}: {df[col].dtype}" for col in df.columns])
 
-    shape_info = f"Rows: {df.shape[0]}, Columns: {df.shape[1]}"
-    column_info = "\n".join([f"> {col}: {df[col].dtype}" for col in df.columns])
-
-    info = f"{shape_info}\nColumn info:\n{column_info}"
+    info: str = f"{shape_info}\nColumn info:\n{column_info}"
     return info
 
 
@@ -48,8 +44,12 @@ def build_interface() -> gr.Blocks:
     with gr.Blocks(title="CSV Trainer/Tester") as demo:
         gr.Markdown("## Train on CSV, Predict on CSV")
 
-        model_names = list(MODEL_REGISTRY.keys())
+        # Store pd.dataframe of csv data
+        data_train = gr.State(None)
+        data_test = gr.State(None)
 
+        # Select model
+        model_names = list(MODEL_REGISTRY.keys())
         model_name = gr.Dropdown(
             label="Select a model",
             choices=model_names,
@@ -57,11 +57,12 @@ def build_interface() -> gr.Blocks:
             interactive=True,
         )
 
+        # CSV upload
         with gr.Row():
             train_csv = gr.File(label="Training CSV", file_types=[".csv"])
             test_csv = gr.File(label="Test CSV", file_types=[".csv"])
 
-        # Target selectors
+        # CSV target selectors
         with gr.Row():
             train_target = gr.Dropdown(
                 label="Training target column (defaults to last)",
@@ -76,27 +77,31 @@ def build_interface() -> gr.Blocks:
                 interactive=True,
             )
 
-        # Populate choices on upload
-        train_csv.change(fn=infer_columns, inputs=train_csv, outputs=train_target)
-        test_csv.change(fn=infer_columns, inputs=test_csv, outputs=test_target)
+        # CSV info display
+        with gr.Accordion(label="Data Information", open=True):
+            with gr.Row():
+                add_train_header = gr.Checkbox(
+                    value=False, label="Add Header Row for Training Data"
+                )
+                add_test_header = gr.Checkbox(
+                    value=False, label="Add Header Row for Testing Data"
+                )
 
-        # CSV info
-        with gr.Row():
-            info_box_train = gr.Textbox(
-                label="Training Data Info",
-                lines=5,
-                interactive=False,
-            )
-            info_box_test = gr.Textbox(
-                label="Testing Data Info",
-                lines=5,
-                interactive=False,
-            )
+            with gr.Row():
+                info_box_train = gr.Textbox(
+                    label="Training Data Information",
+                    lines=5,
+                    max_lines=20,
+                    interactive=False,
+                )
+                info_box_test = gr.Textbox(
+                    label="Testing Data Information",
+                    lines=5,
+                    max_lines=20,
+                    interactive=False,
+                )
 
-        # Populate info on upload
-        train_csv.change(fn=gather_data, inputs=train_csv, outputs=info_box_train)
-        test_csv.change(fn=gather_data, inputs=test_csv, outputs=info_box_test)
-
+        # CSV preview
         with gr.Row():
             train_preview = gr.Dataframe(
                 label="Training CSV (head)",
@@ -109,12 +114,36 @@ def build_interface() -> gr.Blocks:
                 interactive=False,
             )
 
-        # Populate preview on upload
-        train_csv.change(fn=preview_data, inputs=train_csv, outputs=train_preview)
-        test_csv.change(fn=preview_data, inputs=test_csv, outputs=test_preview)
+        # Save CSV to state
+        train_csv.change(
+            fn=read_csv_to_df, inputs=[train_csv, add_train_header], outputs=data_train
+        )
+        test_csv.change(
+            fn=read_csv_to_df, inputs=[test_csv, add_test_header], outputs=data_test
+        )
+        add_train_header.change(
+            fn=read_csv_to_df, inputs=[train_csv, add_train_header], outputs=data_train
+        )
+        add_test_header.change(
+            fn=read_csv_to_df, inputs=[test_csv, add_test_header], outputs=data_test
+        )
 
+        # Populate choices on CSV change
+        data_train.change(fn=infer_columns, inputs=data_train, outputs=train_target)
+        data_test.change(fn=infer_columns, inputs=data_test, outputs=test_target)
+
+        # Populate info on CSV change
+        data_train.change(fn=gather_data, inputs=data_train, outputs=info_box_train)
+        data_test.change(fn=gather_data, inputs=data_test, outputs=info_box_test)
+
+        # Populate preview on CSV change
+        data_train.change(fn=preview_data, inputs=data_train, outputs=train_preview)
+        data_test.change(fn=preview_data, inputs=data_test, outputs=test_preview)
+
+        # Fit and Predict
         run_btn = gr.Button("Fit & Predict")
 
+        # Result previews
         preds_preview = gr.Dataframe(label="Predictions (first 10)", interactive=False)
         preds_file = gr.File(label="Download predictions.csv")
         info_box = gr.Textbox(label="Info", interactive=False)
@@ -124,8 +153,8 @@ def build_interface() -> gr.Blocks:
             fn=run_training_and_predict,
             inputs=[
                 model_name,
-                train_csv,
-                test_csv,
+                data_train,
+                data_test,
                 train_target,
                 test_target,
             ],
@@ -140,7 +169,7 @@ def build_interface() -> gr.Blocks:
         return demo
 
 
-def run_ui():
+def run_ui() -> None:
     """Launches the Gradio app."""
-    demo = build_interface()
+    demo: gr.Blocks = build_interface()
     demo.launch()
