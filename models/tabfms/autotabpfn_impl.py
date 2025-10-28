@@ -9,7 +9,7 @@ class AutoTabPFNImpl:
     model_name: str = "TabPFN"
 
     def __init__(self) -> None:
-        self._model = AutoTabPFNClassifier(device='auto', max_time=30)  # use all default parameters
+        self._model = AutoTabPFNClassifier(device='auto', max_time=60)
         self._lbl2idx = None
         self._idx2lbl = None
 
@@ -44,7 +44,7 @@ class AutoTabPFNRegImpl:
     model_name: str = "TabPFN"
 
     def __init__(self) -> None:
-        self._model = AutoTabPFNRegressor(device='auto', max_time=30)  # use all default parameters
+        self._model = AutoTabPFNRegressor(device='auto', max_time=60)
 
         self.isFit = False
 
