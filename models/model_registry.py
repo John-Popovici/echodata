@@ -8,13 +8,40 @@ from models.tabfms.autotabpfn_impl import AutoTabPFNImpl, AutoTabPFNRegImpl
 from models.tabfms.tabstar_impl import TabSTARImpl, TabSTARRegImpl
 
 # Map models
-
-MODEL_REGISTRY: dict[str, type[TabularFMProtocol]] = {
-    "TabICL_Classification": TabICLImpl,
-    "TabPFN_Classification": TabPFNImpl,
-    "TabPFN_Regression": TabPFNRegImpl,
-    "AutoTabPFN_Classification": AutoTabPFNImpl,
-    "AutoTabPFN_Regression": AutoTabPFNRegImpl,
-    "TabSTAR_Classification": TabSTARImpl,
-    "TabSTAR_Regression": TabSTARRegImpl,
+MODEL_REGISTRY: dict[str, dict[str, str | type[TabularFMProtocol]]] = {
+    "TabICL_Classification": {
+        "model": TabICLImpl,
+        "model_name": "TabICL",
+        "model_type": "Classification",
+    },
+    "TabPFN_Classification": {
+        "model": TabPFNImpl,
+        "model_name": "TabPFN",
+        "model_type": "Classification",
+    },
+    "TabPFN_Regression": {
+        "model": TabPFNRegImpl,
+        "model_name": "TabPFN",
+        "model_type": "Regression",
+    },
+    "AutoTabPFN_Classification": {
+        "model": AutoTabPFNImpl,
+        "model_name": "AutoTabPFN",
+        "model_type": "Classification",
+    },
+    "AutoTabPFN_Regression": {
+        "model": AutoTabPFNRegImpl,
+        "model_name": "AutoTabPFN",
+        "model_type": "Regression",
+    },
+    "TabSTAR_Classification": {
+        "model": TabSTARImpl,
+        "model_name": "TabSTAR",
+        "model_type": "Classification",
+    },
+    "TabSTAR_Regression": {
+        "model": TabSTARRegImpl,
+        "model_name": "TabSTAR",
+        "model_type": "Regression",
+    },
 }

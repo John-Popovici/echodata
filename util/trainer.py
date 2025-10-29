@@ -9,7 +9,7 @@ from models.model_registry import MODEL_REGISTRY
 
 
 def run_training_and_predict(
-    model_name: str,
+    model_id: str,
     train_df: pd.DataFrame,
     test_df: pd.DataFrame,
     train_target_col: str,
@@ -42,12 +42,21 @@ def run_training_and_predict(
         raise gr.Error("Please ensure training and test have an equal number of columns.")
 
 
-    # Fit + predict
+    # Get model data
     try:
-        ModelClass = MODEL_REGISTRY[model_name]
+        ModelClass = MODEL_REGISTRY[model_id]["model"]
+        model_name = MODEL_REGISTRY[model_id]["model_name"]
+        model_type = MODEL_REGISTRY[model_id]["model_type"]
     except KeyError:
         raise gr.Error("Model missing.")
 
+    # Check data compared to model
+    print(f"{model_name}_{model_type}")
+    if train_df[train_target_col].nunique() > 20 and model_type == "Classification":
+        raise gr.Error("Current model type is classification but more than 20 classes detected.")
+
+
+    # Fit + predict
     model = ModelClass().fit(X_train, y_train)
     preds = model.predict(X_test)
 
