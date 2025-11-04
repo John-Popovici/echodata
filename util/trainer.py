@@ -103,10 +103,6 @@ def run_training_and_predict(
     except KeyError:
         raise gr.Error("Model missing.")
 
-    # Check data compared to model
-    if train_df[train_target_col].nunique() > 20 and model_type == "Classification":
-        raise gr.Error("Current model type is classification but more than 20 classes detected.")
-
 
     # Fit + predict
     model = ModelClass().fit(X_train, y_train)
