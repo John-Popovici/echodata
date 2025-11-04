@@ -50,28 +50,32 @@ def build_interface() -> gr.Blocks:
         # CSV info display
         with gr.Accordion(label="Data Information", open=True):
             with gr.Row():
-                add_train_header = gr.Checkbox(
-                    value=False,
-                    label="Add Header Row for Training Data",
-                )
-                add_test_header = gr.Checkbox(
-                    value=False,
-                    label="Add Header Row for Testing Data",
-                )
-
-            with gr.Row():
-                info_box_train = gr.Textbox(
-                    label="Training Data Information",
-                    lines=5,
-                    max_lines=20,
-                    interactive=False,
-                )
-                info_box_test = gr.Textbox(
-                    label="Testing Data Information",
-                    lines=5,
-                    max_lines=20,
-                    interactive=False,
-                )
+                with gr.Column():
+                    add_train_header = gr.Checkbox(
+                        value=False,
+                        label="Add Header Row for Training Data",
+                    )
+                    info_box_train = gr.Textbox(
+                        label="Training Data Information",
+                        lines=5,
+                        max_lines=20,
+                        interactive=False,
+                    )
+                with gr.Column():
+                    add_test_header = gr.Checkbox(
+                        value=False,
+                        label="Add Header Row for Testing Data",
+                    )
+                    target_empty = gr.Checkbox(
+                        value=False,
+                        label="Ignore Target Column",
+                    )
+                    info_box_test = gr.Textbox(
+                        label="Testing Data Information",
+                        lines=5,
+                        max_lines=20,
+                        interactive=False,
+                    )
 
         # CSV preview
         with gr.Row():
@@ -110,13 +114,13 @@ def build_interface() -> gr.Blocks:
         # Result previews
         preds_preview = gr.Dataframe(label="Predictions Preview", interactive=False)
         preds_file = gr.File(label="Download predictions.csv")
-        info_box = gr.Textbox(label="Info", interactive=False)
-        accuracy_box = gr.Textbox(label="Metrics", interactive=False)
+        info_box = gr.Textbox(label="Info", lines=5, max_lines=20,interactive=False)
+        scores_box = gr.Dataframe(label="Evaluations (if test has target)", interactive=False)
 
         run_btn.click(
             fn=run_training_and_predict,
-            inputs=[model_name, data_train, data_test, train_target, test_target],
-            outputs=[preds_preview, preds_file, info_box, accuracy_box],
+            inputs=[model_name, data_train, data_test, train_target, test_target, target_empty],
+            outputs=[preds_preview, preds_file, info_box, scores_box],
         )
 
         return demo

@@ -6,6 +6,7 @@ from models.tabfms.tabicl_impl import TabICLImpl
 from models.tabfms.tabpfn_impl import TabPFNImpl, TabPFNRegImpl
 from models.tabfms.autotabpfn_impl import AutoTabPFNImpl, AutoTabPFNRegImpl
 from models.tabfms.tabstar_impl import TabSTARImpl, TabSTARRegImpl
+from models.tabfms.mitra_impl import MitraImpl, MitraRegImpl
 
 # Map models
 MODEL_REGISTRY: dict[str, dict[str, str | type[TabularFMProtocol]]] = {
@@ -42,6 +43,16 @@ MODEL_REGISTRY: dict[str, dict[str, str | type[TabularFMProtocol]]] = {
     "TabSTAR_Regression": {
         "model": TabSTARRegImpl,
         "model_name": "TabSTAR",
+        "model_type": "Regression",
+    },
+    "Mitra_Classification": {
+        "model": MitraImpl,
+        "model_name": "Mitra",
+        "model_type": "Classification",
+    },
+    "Mitra_Regression": {
+        "model": MitraRegImpl,
+        "model_name": "Mitra",
         "model_type": "Regression",
     },
 }

@@ -55,8 +55,6 @@ class TabSTARRegImpl:
 
     def __init__(self) -> None:
         self._model = TabSTARRegressor()  # use all default parameters
-        self._lbl2idx = None
-        self._idx2lbl = None
 
         self.isFit = False
 
