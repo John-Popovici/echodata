@@ -1,106 +1,132 @@
 # app.py
-import os
-import tempfile
-import numpy as np
-import pandas as pd
+
 import gradio as gr
 
-from models.tabfms.tabicl_impl import TabICLImpl
+from util.data_handling import read_csv_to_df, preview_data, infer_train_columns, infer_test_columns, analyze_df
+from util.trainer import run_training_and_predict
+
+from models.model_registry import MODEL_REGISTRY
 
 
-def read_csv_to_df(file_obj) -> pd.DataFrame:
-    if file_obj is None:
-        raise gr.Error("Please upload the CSV.")
-    # gradio gives a tempfile-like object with .name
-    return pd.read_csv(file_obj.name)
+def build_interface() -> gr.Blocks:
+    """Build the Gradio interface."""
+
+    with gr.Blocks(title="CSV Trainer/Tester") as demo:
+        gr.Markdown("## Train on CSV, Predict on CSV")
+
+        # Store pd.dataframe of csv data
+        data_train = gr.State(None)
+        data_test = gr.State(None)
+
+        # Select model
+        model_names = list(MODEL_REGISTRY.keys())
+        model_name = gr.Dropdown(
+            label="Select a model",
+            choices=model_names,
+            value=model_names[0],
+            interactive=True,
+        )
+
+        # CSV upload
+        with gr.Row():
+            train_csv = gr.File(label="Training CSV", file_types=[".csv"])
+            test_csv = gr.File(label="Test CSV", file_types=[".csv"])
+
+        # CSV target selectors
+        with gr.Row():
+            train_target = gr.Dropdown(
+                label="Training target column",
+                choices=[],
+                value=None,
+                interactive=True,
+            )
+            test_target = gr.Dropdown(
+                label="Test target column",
+                choices=[],
+                value=None,
+                interactive=True,
+            )
+
+        # CSV info display
+        with gr.Accordion(label="Data Information", open=True):
+            with gr.Row():
+                with gr.Column():
+                    add_train_header = gr.Checkbox(
+                        value=False,
+                        label="Add Header Row for Training Data",
+                    )
+                    info_box_train = gr.Textbox(
+                        label="Training Data Information",
+                        lines=5,
+                        max_lines=20,
+                        interactive=False,
+                    )
+                with gr.Column():
+                    add_test_header = gr.Checkbox(
+                        value=False,
+                        label="Add Header Row for Testing Data",
+                    )
+                    target_empty = gr.Checkbox(
+                        value=False,
+                        label="Ignore Target Column",
+                    )
+                    info_box_test = gr.Textbox(
+                        label="Testing Data Information",
+                        lines=5,
+                        max_lines=20,
+                        interactive=False,
+                    )
+
+        # CSV preview
+        with gr.Row():
+            train_preview = gr.Dataframe(
+                label="Training Data Preview",
+                value=None,
+                interactive=False,
+            )
+            test_preview = gr.Dataframe(
+                label="Test Data Preview",
+                value=None,
+                interactive=False,
+            )
+
+        # Save CSV to state
+        train_csv.change(fn=read_csv_to_df, inputs=[train_csv, add_train_header], outputs=data_train)
+        test_csv.change(fn=read_csv_to_df, inputs=[test_csv, add_test_header], outputs=data_test)
+        add_train_header.change(fn=read_csv_to_df, inputs=[train_csv, add_train_header], outputs=data_train)
+        add_test_header.change(fn=read_csv_to_df, inputs=[test_csv, add_test_header], outputs=data_test)
+
+        # Populate choices on df change
+        data_train.change(fn=infer_train_columns, inputs=data_train, outputs=train_target)
+        data_test.change(fn=infer_test_columns, inputs=data_test, outputs=test_target)
+
+        # Populate info on df change
+        data_train.change(fn=analyze_df, inputs=data_train, outputs=info_box_train)
+        data_test.change(fn=analyze_df, inputs=data_test, outputs=info_box_test)
+
+        # Populate preview on df change
+        data_train.change(fn=preview_data, inputs=data_train, outputs=train_preview)
+        data_test.change(fn=preview_data, inputs=data_test, outputs=test_preview)
+
+        # Fit and Predict
+        run_btn = gr.Button("Fit & Predict")
+
+        # Result previews
+        preds_preview = gr.Dataframe(label="Predictions Preview", interactive=False)
+        preds_file = gr.File(label="Download predictions.csv")
+        info_box = gr.Textbox(label="Info", lines=5, max_lines=20,interactive=False)
+        scores_box = gr.Dataframe(label="Evaluations (if test has target)", interactive=False)
+
+        run_btn.click(
+            fn=run_training_and_predict,
+            inputs=[model_name, data_train, data_test, train_target, test_target, target_empty],
+            outputs=[preds_preview, preds_file, info_box, scores_box],
+        )
+
+        return demo
 
 
-def infer_columns(file):
-    df = read_csv_to_df(file)
-    cols = list(map(str, df.columns))
-    default = cols[-1] if cols else None
-    return gr.update(choices=cols, value=default)
-
-
-def run_training_and_predict(train_file, test_file, train_target_col, test_target_col):
-    # Load CSVs
-    train_df = read_csv_to_df(train_file)
-    test_df = read_csv_to_df(test_file)
-
-    # Train target (default to last col)
-    if train_target_col is None or train_target_col not in train_df.columns:
-        train_target_col = train_df.columns[-1]
-
-    # Split into numpy
-    y_train = train_df[train_target_col].to_numpy()
-    X_train = train_df.drop(columns=[train_target_col]).to_numpy()
-    X_test = test_df.drop(columns=[test_target_col]).to_numpy() if (test_target_col and test_target_col in test_df.columns) else test_df.to_numpy()
-
-    # Fit + predict
-    model = TabICLImpl().fit(X_train, y_train)
-    preds = model.predict(X_test)
-
-    # Accuracy (only if test has a target column)
-    accuracy = None
-    if test_target_col and test_target_col in test_df.columns:
-        y_test = test_df[test_target_col].to_numpy()
-        accuracy = float((preds == y_test).mean())
-
-    # Build outputs
-    preds_df = pd.DataFrame({"prediction": preds})
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
-    preds_df.to_csv(tmp.name, index=False)
-
-    info = (
-        f"Shapes — X_train: {X_train.shape}, y_train: {y_train.shape}, "
-        f"X_test: {X_test.shape}\nModel: {model.model_name}"
-    )
-    return (
-        train_df.head(5),
-        test_df.head(5),
-        preds_df.head(10),
-        tmp.name,
-        info,
-        "N/A" if accuracy is None else accuracy,
-    )
-
-
-with gr.Blocks(title="TabICL — CSV Trainer/Tester") as demo:
-    gr.Markdown("## TabICL — Train on CSV, Predict on CSV")
-
-    with gr.Row():
-        train_csv = gr.File(label="Training CSV", file_types=[".csv"])
-        test_csv = gr.File(label="Test CSV", file_types=[".csv"])
-
-    # target selectors
-    train_target = gr.Dropdown(
-        label="Training target column (defaults to last)",
-        choices=[], value=None, interactive=True,
-    )
-    test_target = gr.Dropdown(
-        label="(Optional) Test target column for accuracy",
-        choices=[], value=None, interactive=True,
-    )
-
-    # populate choices on upload
-    train_csv.change(infer_columns, inputs=train_csv, outputs=train_target)
-    test_csv.change(infer_columns, inputs=test_csv, outputs=test_target)
-
-    run_btn = gr.Button("Fit & Predict")
-
-    with gr.Row():
-        train_preview = gr.Dataframe(label="Training CSV (head)", interactive=False)
-        test_preview = gr.Dataframe(label="Test CSV (head)", interactive=False)
-    preds_preview = gr.Dataframe(label="Predictions (first 10)", interactive=False)
-    preds_file = gr.File(label="Download predictions.csv")
-    info_box = gr.Textbox(label="Info", interactive=False)
-    accuracy_box = gr.Number(label="Accuracy (if test has target)", precision=4)
-
-    run_btn.click(
-        fn=run_training_and_predict,
-        inputs=[train_csv, test_csv, train_target, test_target],
-        outputs=[train_preview, test_preview, preds_preview, preds_file, info_box, accuracy_box],
-    )
-
-if __name__ == "__main__":
+def run_ui() -> None:
+    """Launches the Gradio app."""
+    demo: gr.Blocks = build_interface()
     demo.launch()

@@ -1,15 +1,15 @@
 import numpy as np
-from tabicl import TabICLClassifier
+from tabpfn_extensions.post_hoc_ensembles.sklearn_interface import AutoTabPFNClassifier, AutoTabPFNRegressor
 from typing import Self
 
 
-class TabICLImpl:
-    """Minimal implementation of TabularFMProtocol using TabICL with default settings."""
+class AutoTabPFNImpl:
+    """Minimal adapter for TabPFNClassifier."""
 
-    model_name: str = "TabICL"
+    model_name: str = "TabPFN"
 
     def __init__(self) -> None:
-        self._model = TabICLClassifier()  # use all default parameters
+        self._model = AutoTabPFNClassifier(device='auto', max_time=60)
         self._lbl2idx = None
         self._idx2lbl = None
 
@@ -36,3 +36,29 @@ class TabICLImpl:
         X = np.asarray(X)
         preds_idx = self._model.predict(X)
         return np.array([self._idx2lbl[i] for i in preds_idx], dtype=object)
+
+
+class AutoTabPFNRegImpl:
+    """Minimal adapter for TabPFNRegressor."""
+
+    model_name: str = "TabPFN"
+
+    def __init__(self) -> None:
+        self._model = AutoTabPFNRegressor(device='auto', max_time=60)
+
+        self.isFit = False
+
+    def fit(self, X: np.ndarray, y: np.ndarray) -> Self:
+        X = np.asarray(X)
+        y = np.asarray(y)
+
+        self._model.fit(X, y)
+        self.isFit = True
+        return self
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        if not self.isFit:
+            raise RuntimeError("Model not fitted. Call fit() first.")
+
+        X = np.asarray(X)
+        return self._model.predict(X)
