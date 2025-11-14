@@ -21,7 +21,9 @@ from util.trainer import run_training_and_predict
 def update_tasks(selected_model_name: str) -> dict[str, Any]:
     """Update possible tasks based on model."""
     model_cls: type[BaseModel] = MODEL_REGISTRY[selected_model_name]
-    return gr.update(choices=model_cls.model_possible_tasks, value=None)
+    return gr.update(
+        choices=model_cls.model_possible_tasks, value=model_cls.model_possible_tasks[0]
+    )
 
 
 def build_interface() -> gr.Blocks:
@@ -36,8 +38,7 @@ def build_interface() -> gr.Blocks:
 
         # Select model
         first_model_name: str = (
-            "TabPFN" if "TabPFN" in MODEL_REGISTRY
-            else next(iter(MODEL_REGISTRY))
+            "TabPFN" if "TabPFN" in MODEL_REGISTRY else next(iter(MODEL_REGISTRY))
         )
 
         with gr.Row():
