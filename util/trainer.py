@@ -20,17 +20,31 @@ from models.model_base import BaseModel
 from models.model_registry import MODEL_REGISTRY
 
 
-def evaluation_scores(task: str, y_true: pd.DataFrame, y_pred: pd.DataFrame) -> dict[str, float]:
+def evaluation_scores(
+    task: str, y_true: pd.DataFrame, y_pred: pd.DataFrame
+) -> dict[str, float]:
     """Generate prediction scores."""
     scores: dict[str, float] = {}
     if task == "classification":
         scores["Accuracy"] = float(accuracy_score(y_true, y_pred))
-        scores["Precision (Macro)"] = float(precision_score(y_true, y_pred, average="macro", zero_division=0))
-        scores["Recall (Macro)"] = float(recall_score(y_true, y_pred, average="macro", zero_division=0))
-        scores["F1 (Macro)"] = float(f1_score(y_true, y_pred, average="macro", zero_division=0))
-        scores["Precision (Micro)"] = float(precision_score(y_true, y_pred, average="micro", zero_division=0))
-        scores["Recall (Micro)"] = float(recall_score(y_true, y_pred, average="micro", zero_division=0))
-        scores["F1 (Micro)"] = float(f1_score(y_true, y_pred, average="micro", zero_division=0))
+        scores["Precision (Macro)"] = float(
+            precision_score(y_true, y_pred, average="macro", zero_division=0)
+        )
+        scores["Recall (Macro)"] = float(
+            recall_score(y_true, y_pred, average="macro", zero_division=0)
+        )
+        scores["F1 (Macro)"] = float(
+            f1_score(y_true, y_pred, average="macro", zero_division=0)
+        )
+        scores["Precision (Micro)"] = float(
+            precision_score(y_true, y_pred, average="micro", zero_division=0)
+        )
+        scores["Recall (Micro)"] = float(
+            recall_score(y_true, y_pred, average="micro", zero_division=0)
+        )
+        scores["F1 (Micro)"] = float(
+            f1_score(y_true, y_pred, average="micro", zero_division=0)
+        )
     else:
         scores["MAE"] = float(mean_absolute_error(y_true, y_pred))
         scores["MSE"] = float(mean_squared_error(y_true, y_pred))
@@ -65,20 +79,42 @@ def load_and_validate(
     else:
         y_test: pd.Series | None = None
         X_test: pd.DataFrame = test_df.copy()
-    
+
     # If target empty, discard it
     if target_empty:
         y_test: pd.DataFrame | None = None
 
     # Validate shape consistency
     if X_train.shape[1] + 1 == X_test.shape[1] and test_target_col == "None":
-        raise gr.Error("Test target might not be None: mismatched column numbers by one.")
+        raise gr.Error(
+            "Test target might not be None: mismatched column numbers by one."
+        )
     if X_train.shape[1] == X_test.shape[1] + 1 and test_target_col != "None":
         raise gr.Error("Test target might be None: mismatched column numbers by one.")
     if X_train.shape[1] != X_test.shape[1]:
-        raise gr.Error("Please ensure training and test have an equal number of columns.")
+        raise gr.Error(
+            "Please ensure training and test have an equal number of columns."
+        )
 
     return X_train, y_train, X_test, y_test
+
+
+def train_and_predict(
+    model_name: str,
+    model_task: str,
+    X_train: pd.DataFrame,
+    y_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+) -> tuple[BaseModel, pd.DataFrame]:
+    """Train and predict using the model"""
+    # Get model
+    model_cls: type[BaseModel] = MODEL_REGISTRY[model_name]
+    model: BaseModel = model_cls(model_task)
+
+    # Fit + predict
+    model = model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    return model, y_pred
 
 
 def run_training_and_predict(
@@ -90,18 +126,20 @@ def run_training_and_predict(
     test_target_col: str,
     target_empty: bool,
 ) -> tuple[pd.DataFrame, str, str, pd.DataFrame]:
-    """Train and predict using the model."""
+    """Run model predictions and generate output csv."""
     # Load and validate data
-    X_train, y_train, X_test, y_test = load_and_validate(train_df, test_df, train_target_col, test_target_col, target_empty)
+    X_train, y_train, X_test, y_test = load_and_validate(
+        train_df, test_df, train_target_col, test_target_col, target_empty
+    )
 
-    # Get model
-    model_cls: type[BaseModel] = MODEL_REGISTRY[model_name]
-    model: BaseModel = model_cls(model_task)
-
-    # Fit + predict
-    model = model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-
+    # Get model predictions
+    model, y_pred = train_and_predict(
+        model_name,
+        model_task,
+        X_train,
+        y_train,
+        X_test,
+    )
 
     # Build prediction df
     preds_df = test_df.copy()
@@ -132,7 +170,9 @@ def run_training_and_predict(
     scores: pd.DataFrame = pd.DataFrame()
     if y_test is not None:
         try:
-            scores = pd.DataFrame([evaluation_scores(model_task, y_test, y_pred.astype(y_test.dtype))])
+            scores = pd.DataFrame(
+                [evaluation_scores(model_task, y_test, y_pred.astype(y_test.dtype))]
+            )
         except Exception:
             pass
 
@@ -143,3 +183,45 @@ def run_training_and_predict(
         scores,
     )
 
+
+def run_leaderboard(
+    model_name: str,
+    model_task: str,
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    train_target_col: str,
+    test_target_col: str,
+    target_empty: bool,
+) -> pd.DataFrame:
+    # Partial training and predict
+    # fct = partial(
+    #     train_and_predict,
+    #     task=task,
+    #     X_train=X_train,
+    #     y_train=y_train,
+    #     X_test=X_test,
+    #     train_target_col=train_target_col,
+    #     feature_names=feature_names,
+    # )
+    pass
+
+# def Leaderboard(task, train_file, test_file,
+#                 train_target_col, test_target_col):
+
+#     (train_df, test_df, X_train, y_train, X_test, y_test,
+#         feature_names, train_target_col) = load_datasets(
+#      train_file, test_file, train_target_col, test_target_col)
+
+#     if y_test is None:
+#         return "N/A"
+
+#     fct = partial(train_and_predict, task=task, X_train=X_train,
+#                   y_train=y_train, X_test=X_test,
+#                   train_target_col=train_target_col,
+#                   feature_names=feature_names)
+
+#     if y_test is not None:
+#         return pd.DataFrame.from_dict(
+#             {model.model_name: evaluation_scores(task, y_test, preds)
+#              for (model, preds) in map(fct, tab_models.__all__)},
+#             orient="index").reset_index(names="Models")
