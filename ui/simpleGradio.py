@@ -220,11 +220,6 @@ def build_interface() -> gr.Blocks:
                 interactive=True,
             )
 
-            # Update model list
-            model_task.change(
-                fn=update_models_based_on_task, inputs=model_task, outputs=model_name
-            )
-
             # Fit and Predict
             run_btn = gr.Button("Fit & Predict")
 
@@ -240,7 +235,7 @@ def build_interface() -> gr.Blocks:
         with gr.Tab("Model Comparisons"):
             # Select model
             leaderboard_model_names = gr.Dropdown(
-                label="Select a model",
+                label="Select models",
                 multiselect=True,
                 choices=get_models_based_on_task(first_task_type),
                 value=None,
@@ -252,6 +247,16 @@ def build_interface() -> gr.Blocks:
 
             # Results previews
             leaderboard_box = gr.Dataframe(label="Leaderboard", interactive=False)
+
+        # Update model lists
+        model_task.change(
+            fn=update_models_based_on_task, inputs=model_task, outputs=model_name
+        )
+        model_task.change(
+            fn=update_models_based_on_task,
+            inputs=model_task,
+            outputs=leaderboard_model_names,
+        )
 
         # Fit and Predict run button
         run_btn.click(
@@ -280,7 +285,7 @@ def build_interface() -> gr.Blocks:
                 test_target,
                 target_empty,
             ],
-            outputs=[leaderboard_box]
+            outputs=[leaderboard_box],
         )
 
         return demo

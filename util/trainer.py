@@ -24,6 +24,7 @@ def evaluation_scores(
     task: str, y_true: pd.DataFrame, y_pred: pd.DataFrame
 ) -> dict[str, float]:
     """Generate prediction scores."""
+    y_pred = y_pred.astype(y_true.dtype)
     scores: dict[str, float] = {}
     if task == "classification":
         scores["Accuracy"] = float(accuracy_score(y_true, y_pred))
@@ -159,7 +160,7 @@ def run_training_and_predict(
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
     preds_df.to_csv(tmp.name, index=False)
 
-    # Construct output information
+    # Construct model and data information
     info = (
         f"Shapes:\n"
         f"> X_train: {X_train.shape}\n> y_train: {y_train.shape}\n"
@@ -167,25 +168,17 @@ def run_training_and_predict(
         f"Model: {model.model_name}\n"
         f"> model_task: {model.model_task}\n"
     )
+
+    # Construct score table
     scores: pd.DataFrame = pd.DataFrame()
     if y_test is not None:
-        try:
-            scores = pd.DataFrame(
-                [evaluation_scores(model_task, y_test, y_pred.astype(y_test.dtype))]
-            )
-        except Exception:
-            pass
+        scores = pd.DataFrame([evaluation_scores(model_task, y_test, y_pred)])
 
-    return (
-        preds_df.head(10),
-        tmp.name,
-        info,
-        scores,
-    )
+    return (preds_df.head(10), tmp.name, info, scores)
 
 
 def run_leaderboard(
-    model_name: str,
+    model_names: list[str],
     model_task: str,
     train_df: pd.DataFrame,
     test_df: pd.DataFrame,
@@ -193,35 +186,38 @@ def run_leaderboard(
     test_target_col: str,
     target_empty: bool,
 ) -> pd.DataFrame:
-    # Partial training and predict
-    # fct = partial(
-    #     train_and_predict,
-    #     task=task,
-    #     X_train=X_train,
-    #     y_train=y_train,
-    #     X_test=X_test,
-    #     train_target_col=train_target_col,
-    #     feature_names=feature_names,
-    # )
-    pass
+    """Run models and compare results."""
+    # Load and validate data
+    X_train, y_train, X_test, y_test = load_and_validate(
+        train_df, test_df, train_target_col, test_target_col, target_empty
+    )
 
-# def Leaderboard(task, train_file, test_file,
-#                 train_target_col, test_target_col):
+    # Ensure we have y_test
+    if y_test is None:
+        raise gr.Error("Require testing target for Leaderboard.")
 
-#     (train_df, test_df, X_train, y_train, X_test, y_test,
-#         feature_names, train_target_col) = load_datasets(
-#      train_file, test_file, train_target_col, test_target_col)
+    leaderboard_rows = []
+    for model_name in model_names:
+        try:
+            # Get model predictions
+            model, y_pred = train_and_predict(
+                model_name,
+                model_task,
+                X_train,
+                y_train,
+                X_test,
+            )
+            # Construct score table
+            scores = evaluation_scores(model_task, y_test, y_pred)
+            row = {"model_name": model_name, **scores}
+            leaderboard_rows.append(row)
+            gr.Info(f"{model_name} done.")
 
-#     if y_test is None:
-#         return "N/A"
+        except Exception:
+            # Add row with model_name indicating failure
+            leaderboard_rows.append({"model_name": model_name})
+            gr.Info(f"{model_name} failed.")
 
-#     fct = partial(train_and_predict, task=task, X_train=X_train,
-#                   y_train=y_train, X_test=X_test,
-#                   train_target_col=train_target_col,
-#                   feature_names=feature_names)
-
-#     if y_test is not None:
-#         return pd.DataFrame.from_dict(
-#             {model.model_name: evaluation_scores(task, y_test, preds)
-#              for (model, preds) in map(fct, tab_models.__all__)},
-#             orient="index").reset_index(names="Models")
+    # Add rows of data together and return
+    leaderboard_df = pd.DataFrame(leaderboard_rows)
+    return leaderboard_df
