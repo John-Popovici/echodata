@@ -1,64 +1,35 @@
-import numpy as np
-from tabpfn_extensions.post_hoc_ensembles.sklearn_interface import AutoTabPFNClassifier, AutoTabPFNRegressor
-from typing import Self
+import pandas as pd
+from tabpfn_extensions.post_hoc_ensembles.sklearn_interface import (
+    AutoTabPFNClassifier,
+    AutoTabPFNRegressor,
+)
+from typing import Any, override
+from models.model_base import BaseModel
+from models.model_registry import register_model
 
 
-class AutoTabPFNImpl:
-    """Minimal adapter for TabPFNClassifier."""
+@register_model
+class AutoTabPFNImpl(BaseModel):
+    """Minimal implementation for AutoTabPFN."""
 
-    model_name: str = "TabPFN"
+    model_name: str = "AutoTabPFN"
+    model_possible_tasks: list[str] = [
+        "classification",
+        "regression",
+    ]
 
-    def __init__(self) -> None:
-        self._model = AutoTabPFNClassifier(device='auto', max_time=60)
-        self._lbl2idx = None
-        self._idx2lbl = None
+    @override
+    def __init__(self, model_task: str, **kwargs: Any) -> None:
+        super().__init__(model_task, **kwargs)
+        if self.model_task == "classification":
+            self._model = AutoTabPFNClassifier()
+        elif self.model_task == "regression":
+            self._model = AutoTabPFNRegressor()
 
-        self.isFit = False
-
-    def fit(self, X: np.ndarray, y: np.ndarray) -> Self:
-        X = np.asarray(X)
-        y = np.asarray(y)
-
-        # Encode labels to integers
-        classes = np.unique(y)
-        self._lbl2idx = {lbl: i for i, lbl in enumerate(classes)}
-        self._idx2lbl = {i: lbl for lbl, i in self._lbl2idx.items()}
-        y_idx = np.array([self._lbl2idx[v] for v in y], dtype=int)
-
-        self._model.fit(X, y_idx)
-        self.isFit = True
-        return self
-
-    def predict(self, X: np.ndarray) -> np.ndarray:
-        if not self.isFit:
-            raise RuntimeError("Model not fitted. Call fit() first.")
-
-        X = np.asarray(X)
-        preds_idx = self._model.predict(X)
-        return np.array([self._idx2lbl[i] for i in preds_idx], dtype=object)
-
-
-class AutoTabPFNRegImpl:
-    """Minimal adapter for TabPFNRegressor."""
-
-    model_name: str = "TabPFN"
-
-    def __init__(self) -> None:
-        self._model = AutoTabPFNRegressor(device='auto', max_time=60)
-
-        self.isFit = False
-
-    def fit(self, X: np.ndarray, y: np.ndarray) -> Self:
-        X = np.asarray(X)
-        y = np.asarray(y)
-
+    @override
+    def _fit_impl(self, X: pd.DataFrame, y: pd.DataFrame) -> None:
         self._model.fit(X, y)
-        self.isFit = True
-        return self
 
-    def predict(self, X: np.ndarray) -> np.ndarray:
-        if not self.isFit:
-            raise RuntimeError("Model not fitted. Call fit() first.")
-
-        X = np.asarray(X)
+    @override
+    def _predict_impl(self, X: pd.DataFrame) -> pd.DataFrame:
         return self._model.predict(X)
